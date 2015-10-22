@@ -284,7 +284,7 @@ int coap_build(uint8_t *buf, size_t *buflen, const coap_packet_t *pkt)
     p = buf + 4;
     if ((pkt->hdr.tkl > 0) && (pkt->hdr.tkl != pkt->tok.len))
         return COAP_ERR_UNSUPPORTED;
-    
+
     if (pkt->hdr.tkl > 0)
         memcpy(p, pkt->tok.p, pkt->hdr.tkl);
 
@@ -320,7 +320,7 @@ int coap_build(uint8_t *buf, size_t *buflen, const coap_packet_t *pkt)
         }
         else
         if (len == 14)
-  	    {
+          {
             *p++ = (pkt->opts[i].buf.len >> 8);
             *p++ = (0xFF & (pkt->opts[i].buf.len-269));
         }
@@ -359,6 +359,49 @@ void coap_option_nibble(uint32_t value, uint8_t *nibble)
     {
         *nibble = 14;
     }
+}
+
+int coap_make_request ( coap_packet_t *req_pkt,
+                        coap_method_t method,
+                        const coap_endpoint_path_t *path,
+                        uint8_t msgid_hi, uint8_t msgid_lo,
+                        const coap_buffer_t *tok,
+                        coap_content_type_t content_type,
+                        const uint8_t *payload, size_t payload_len)
+{
+    /* create CoAP header */
+    coap_header_t req_hdr = {
+        .ver = 1,
+        .t = COAP_TYPE_CON,
+        .tkl = 0,
+        .code = MAKE_RSPCODE(0, method),
+        .id = {msgid_hi,msgid_lo}
+    };
+    /* payload */
+    coap_buffer_t payload_buf = {
+        .p = (const uint8_t *) payload,
+        .len = payload_len
+    };
+    /* stuff all into packet */
+    req_pkt->hdr = req_hdr;
+    req_pkt->numopts = path->count;
+    req_pkt->payload = payload_buf;
+    // set token if present
+    if (tok) {
+        req_pkt->hdr.tkl = tok->len;
+        req_pkt->tok = *tok;
+    }
+    /* Create one option for each URI path segment */
+    for (int i=0; i < path->count; i++ ) {
+        coap_option_t path_option = {
+            .num = COAP_OPTION_URI_PATH,
+            .buf = {.p = (const uint8_t *) path->elems[i],
+                    .len = strlen(path->elems[i])}
+        };
+
+        req_pkt->opts[i] = path_option;
+    }
+    return 0;
 }
 
 int coap_make_response(coap_rw_buffer_t *scratch, coap_packet_t *pkt, const uint8_t *content, size_t content_len, uint8_t msgid_hi, uint8_t msgid_lo, const coap_buffer_t* tok, coap_responsecode_t rspcode, coap_content_type_t content_type)
@@ -429,4 +472,3 @@ next:
 void coap_setup(void)
 {
 }
-
